@@ -1,0 +1,16 @@
+!/* vim: set filetype=fortran : */
+real  :: Lx=256., Ly=256., Lz=256.
+integer, parameter :: Nx=256, Ny=256, Nz=256
+real :: dt=0.1
+integer, parameter :: shots=200
+integer, parameter :: nsteps=200000
+character(len=*), parameter :: boundaries='periodic'
+character(len=*), parameter :: init_cond='random_points'
+character(len=*), parameter :: potential='harmonic'
+real, parameter :: harm_wx=6., harm_wy=6., harm_wz=20. !trapping potentials set
+integer, parameter :: imag_nsteps=1000
+real, parameter :: potential_off=huge(1.)
+logical, parameter :: two_dim=.false.
+!----------------vortex_rings------------
+integer, parameter :: vor_ring_count=0
+real,parameter :: ring_rad=5.    

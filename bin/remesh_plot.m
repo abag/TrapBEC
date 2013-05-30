@@ -1,0 +1,11 @@
+fid=fopen('./data/remesh.dat');
+endian1=fread(fid,1,'float32');
+A=fread(fid,[2*Nx*Ny*Nz],'float32');
+fclose(fid)
+B=reshape(A,2,Nz,Ny,Nx);
+Psi_rem(1:Nz,1:Ny,1:Nx)=squeeze(B(1,:,:,:))+sqrt(-1.)*squeeze(B(2,:,:,:));
+pcolor(abs(Psi_rem(:,:,Nx/2)))
+figure
+pcolor(squeeze(abs(Psi_rem(Nz/2,:,:))))
+figure
+slice(abs(Psi_rem(:,:,:)),Nz/2,Ny/2,Nx/2)
