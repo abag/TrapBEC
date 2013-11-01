@@ -11,6 +11,8 @@ module initial
     real :: r, theta, func !to insert a vortex
     character(len=40) :: restart_file
     logical :: can_restart_loc=.false.
+    complex :: ring_p1, ring_p2
+
     allocate(Psi(-2:nmeshz+3,-2:nmeshy+3,-2:nmeshx+3))
     allocate(phase(-2:nmeshz+3,-2:nmeshy+3,-2:nmeshx+3))
     allocate(density(-2:nmeshz+3,-2:nmeshy+3,-2:nmeshx+3))
@@ -101,10 +103,31 @@ module initial
           end do
         end do
       end do
+    case('sausage')
+      vort_pos(1)=0.
+      vort_pos(2)=0.
+      do i=1, nmeshx
+        do j=1, nmeshy
+          do k=1, nmeshz
+              r=sqrt((xx(i)-vort_pos(1))**2+(yy(j)-vort_pos(2))**2)
+              theta=atan2(yy(j)-vort_pos(2),xx(i)-vort_pos(1))
+              if (abs(zz(k))<4.) then
+                func=1.-exp(-0.1*r**1.15)
+              else
+                func=1.-exp(-0.7*r**1.15)
+              end if
+              Psi(k,j,i)=func*exp(eye*theta)
+          end do
+        end do
+      end do
     case('random_points')
       call setup_random_points
     case('vortex_rings')
       call setup_vortex_rings
+    case('line_of_lines')
+      call setup_line_of_lines
+    case('linked_rings')
+      call setup_linked_rings
     case('lattice')
       call setup_lattice
     case('lattice2')
@@ -133,7 +156,7 @@ module initial
             TF_dense=TF_dense/sqrt(2.)
             if (TF_dense<0.) TF_dense=0.
             Psi(k,j,i)=cmplx(TF_dense,TF_dense)
-            !Psi(k,j,i)=(1.,1.)
+            Psi(k,j,i)=(1.,1.)
           end do
         end do
       end do
@@ -253,8 +276,8 @@ module initial
       Psi(:,:,:)=(1.,1.)
       do v1=1,3
       do v2=1,3
-      vort_pos(1)=v1*(Lx/4.)
-      vort_pos(2)=v2*(Ly/4.)
+      vort_pos(1)=v1*(Lx/4.)-Lx/2.
+      vort_pos(2)=v2*(Ly/4.)-Ly/2.
       do i=1, nmeshx
         do j=1, nmeshy
           do k=1, nmeshz
@@ -269,8 +292,8 @@ module initial
       end do ; end do
       do v1=1,3
       do v2=1,3
-      vort_pos(1)=v1*(Lx/4.)+10
-      vort_pos(2)=v2*(Lz/4.)+10
+      vort_pos(1)=v1*(Lx/4.)+10-Lx/2.
+      vort_pos(2)=v2*(Lz/4.)+10-Lz/2.
       do i=1, nmeshx
         do j=1, nmeshy
           do k=1, nmeshz
@@ -284,6 +307,100 @@ module initial
       end do
       end do ; end do
   end subroutine
+  !----------------------------------------------------------
+  subroutine setup_line_of_lines
+    implicit none
+    integer :: i, j, k
+    integer :: v1
+    real :: translatex,translatey,translatez
+    complex :: ring_p1, ring_p2
+    real :: vort_pos(2) !position of vortex in xy-plane
+    real :: r, theta, func !to insert a vortex
+    Psi=cmplx(1/sqrt(2.),1/sqrt(2.))
+      do v1=1,vor_line_count
+      vort_pos(1)=-Lx/2.+(real(v1)/(vor_line_count+1))*Lx
+      vort_pos(2)=0.
+      do i=1, nmeshx
+        do j=1, nmeshy
+          do k=1, nmeshz
+              r=sqrt((xx(i)-vort_pos(1))**2+(yy(j)-vort_pos(2))**2)
+              theta=atan2(yy(j)-vort_pos(2),xx(i)-vort_pos(1))
+              func=1.-exp(-0.7*r**1.15)
+              if (mod(v1,2)==0) then
+               tmp(k,j,i)=func*exp(eye*theta)
+              else
+               tmp(k,j,i)=func*exp(-eye*theta)
+              end if
+              Psi(k,j,i)=Psi(k,j,i)*tmp(k,j,i)
+          end do
+        end do
+      end do
+      end do
+      translatex=-Lx/2.+5
+      translatey=0.
+      translatez=0.
+      do i=1, nmeshx
+        do j=1, nmeshy
+          do k=1, nmeshz
+              theta=atan2(xx(i)-translatex,sqrt(yy(j)**2+zz(k)**2)+ring_rad)
+              r=sqrt((xx(i)-translatex)**2+(sqrt(yy(j)**2+zz(k)**2)+ring_rad)**2)
+              ring_p1=ring_density(r)*exp(eye*theta)
+              theta=atan2(xx(i)-translatex,sqrt(yy(j)**2+zz(k)**2)-ring_rad)
+              r=sqrt((xx(i)-translatex)**2+(sqrt(yy(j)**2+zz(k)**2)-ring_rad)**2)
+              ring_p2=ring_density(r)*exp(eye*theta)
+              Psi(k,j,i)=Psi(k,j,i)*ring_p1*conjg(ring_p2)
+          end do
+        end do
+      end do
+  end subroutine
+  !----------------------------------------------------------
+  subroutine setup_linked_rings
+    implicit none
+    integer :: i, j, k
+    integer :: v1
+    real :: translatex,translatey,translatez
+    complex :: ring_p1, ring_p2
+    real :: vort_pos(2) !position of vortex in xy-plane
+    real :: r, theta, func !to insert a vortex
+      translatex=0.
+      translatey=0.
+      translatez=ring_rad*1.5
+      do i=1, nmeshx
+        do j=1, nmeshy
+          do k=1, nmeshz
+              theta=atan2(xx(i)-translatex,sqrt(yy(j)**2+zz(k)**2)+ring_rad)
+              r=sqrt((xx(i)-translatex)**2+(sqrt(yy(j)**2+zz(k)**2)+ring_rad)**2)
+              ring_p1=ring_density(r)*exp(eye*theta)
+              theta=atan2(xx(i)-translatex,sqrt(yy(j)**2+zz(k)**2)-ring_rad)
+              r=sqrt((xx(i)-translatex)**2+(sqrt(yy(j)**2+zz(k)**2)-ring_rad)**2)
+              ring_p2=ring_density(r)*exp(eye*theta)
+              Psi(k,j,i)=ring_p1*conjg(ring_p2)
+          end do
+        end do
+      end do
+      do i=1, nmeshx
+        do j=1, nmeshy
+          do k=1, nmeshz
+              theta=atan2(yy(j)-translatey,sqrt(xx(i)**2+(zz(k)-translatez)**2)+ring_rad)
+              r=sqrt((yy(j)-translatey)**2+(sqrt(xx(i)**2+(zz(k)-translatez)**2)+ring_rad)**2)
+              ring_p1=ring_density(r)*exp(eye*theta)
+              theta=atan2(yy(j)-translatey,sqrt(xx(i)**2+(zz(k)-translatez)**2)-ring_rad)
+              r=sqrt((yy(j)-translatey)**2+(sqrt(xx(i)**2+(zz(k)-translatez)**2)-ring_rad)**2)
+              ring_p2=ring_density(r)*exp(eye*theta)
+              Psi(k,j,i)=Psi(k,j,i)*ring_p1*conjg(ring_p2)
+          end do
+        end do
+      end do
+  end subroutine
+!----------------------------------------------------------
+  real function ring_density(r)
+    real, intent(IN) :: r
+    real :: c1, c2, c3
+    c1=11./32.
+    c3=(5.-32.*c1)/(48.-192*c1)
+    c2=c1*(c3-0.25)
+    ring_density=sqrt((r**2)*(c1+c2*r**2)/(1+c3*r**2+c2*r**4))
+  end function
   !----------------------------------------------------------
   subroutine reload_data
     implicit none

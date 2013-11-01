@@ -53,4 +53,4 @@ initial.o: initial.f90 statistics.o cdata.o
 #
 diagnostic.o: diagnostic.f90 cdata.o deriv.o
 #
-remesh.o: remesh.f90 cdata.o mpi_var.o 
+

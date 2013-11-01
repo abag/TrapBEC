@@ -160,6 +160,14 @@ module ghost
     end if
     call MPI_BARRIER(comm2D,ierror)
     !finally must account for boundaries in z
+    if (periodicz) then
+      Psi(nmeshz+1,1:nmeshy,1:nmeshx)=Psi(1,1:nmeshy,1:nmeshx)
+      Psi(nmeshz+2,1:nmeshy,1:nmeshx)=Psi(2,1:nmeshy,1:nmeshx)
+      Psi(nmeshz+3,1:nmeshy,1:nmeshx)=Psi(3,1:nmeshy,1:nmeshx)
+      Psi(0,1:nmeshy,1:nmeshx)=Psi(nmeshz,1:nmeshy,1:nmeshx)
+      Psi(-1,1:nmeshy,1:nmeshx)=Psi(nmeshz-1,1:nmeshy,1:nmeshx)
+      Psi(-2,1:nmeshy,1:nmeshx)=Psi(nmeshz-2,1:nmeshy,1:nmeshx)
+    else
     select case(boundaries)
       case('periodic')
         Psi(nmeshz+1,1:nmeshy,1:nmeshx)=Psi(1,1:nmeshy,1:nmeshx)
@@ -180,5 +188,6 @@ module ghost
         Psi(nmeshz+2,1:nmeshy,1:nmeshx)=Psi(nmeshz-2,1:nmeshy,1:nmeshx)
         Psi(nmeshz+3,1:nmeshy,1:nmeshx)=Psi(nmeshz-3,1:nmeshy,1:nmeshx)
      end select
+     end if
   end subroutine
 end module
