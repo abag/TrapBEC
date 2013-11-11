@@ -1,0 +1,350 @@
+!  Fortran example
+   module cdata
+     implicit none
+     include 'mpif.h'
+     real, parameter :: Lx=64., Ly=64., Lz=64.
+     integer, parameter :: Nx=64, Ny=64, Nz=64 !global mesh size
+     real, parameter :: hx=Lx/Nx, hy=Lx/Ny, hz=Lz/Nz
+     real, allocatable :: xx(:),yy(:),zz(:) !local physical coords
+     complex, allocatable :: Psi(:,:,:) !local wavefunction
+     complex, allocatable :: rhs(:,:,:), w(:,:,:) !local helpers
+     integer :: nmeshz, nmeshy, nmeshx !local mesh sizes
+     real, parameter :: pi=3.14159265359
+     character (len=40) :: print_file !for printing to file
+     integer :: print_number=1 !for printing to file
+     !--------------------------------------
+     integer :: itime
+     real, parameter :: dt=0.1
+     real :: t=0.
+   end module
+   module mpi_var
+     use cdata
+     implicit none
+     logical :: periodic(2)=.true. !are the boundaries periodic or not?
+     integer :: rank, nprocs, ierror
+     integer :: nprocx, nprocy !number of processes in x/y dir
+     integer, dimension(MPI_STATUS_SIZE) :: stat
+     integer :: comm2D !new MPI comm
+     integer :: tag=100 !for message sending
+     integer :: left, right, top, bot !cartesian array of processes
+     integer :: dims(2)=0, coords(2) ! cartesian array of processes
+     contains
+     subroutine mpi_setup
+       implicit none
+         call MPI_INIT(ierror)
+         call MPI_COMM_SIZE(MPI_COMM_WORLD, nprocs, ierror)
+         call MPI_COMM_RANK(MPI_COMM_WORLD, rank, ierror)
+         !divide up the processors to x and y co-ords
+         call MPI_DIMS_CREATE(nprocs,2,dims,ierror)
+         !YOU NEED TO CHECK OUT COMM2D VS MPI_COMM_WORLD
+         call MPI_CART_CREATE(MPI_COMM_WORLD,2,dims,periodic,.true.,comm2D,ierror)
+         call MPI_CART_COORDS(comm2D, rank, 2, coords, ierror)
+         call MPI_CART_SHIFT(comm2D,0,1,left,right,ierror)
+         call MPI_CART_SHIFT(comm2D,1,1,top,bot,ierror)
+         !now get the number of processes in the x and y direction
+         nprocx=dims(1) ; nprocy=dims(2) !note it is an xy-plane
+         !create local meshes
+         nmeshx=Nx/nprocx ; nmeshy=Ny/nprocy ; nmeshz=Nz
+         if (nmeshx*nprocx/=Nx.or.nmeshy*nprocy/=Ny) then
+            call emergency_stop("unable to evenly subdivide grid check meshsize and number of processors")
+            stop
+         end if
+         print*, rank, coords, top, bot
+     end subroutine
+     subroutine emergency_stop(err_string)
+      implicit none
+      character(*), intent(in) :: err_string
+      if (rank == 0) then
+        ! Print error to screen, write error to ERROR.
+        print*, err_string
+        open (96, file = 'ERROR')
+          write (96, *) err_string
+        close (96)
+      end if
+      ! Stop the MPI process grid.
+      call MPI_BARRIER(MPI_COMM_WORLD, ierror)
+      call MPI_FINALIZE(ierror)
+      ! Emergency stop.
+      stop
+     end subroutine emergency_stop
+   end module
+   module deriv
+   use cdata
+   implicit none
+   contains
+   complex function second_deriv(vect,h)
+     !TAKE THE 2ND DERIVATIVE OF THE VECT ARRAY
+     implicit none
+     complex, intent(IN) :: vect(-3:3)
+     real,intent(IN) :: h
+     second_deriv=(2*vect(-3)-27*vect(-2)+270*vect(-1)-490*vect(0)+270*vect(1)- 27*vect(2)+2*vect(3))/(180*(h**2))
+   end function
+   end module
+   module output
+     use cdata
+     use mpi_var
+     implicit none
+     contains
+     subroutine dims_print
+      implicit none
+      open(unit=87,file='./data/dims.log')
+        write(87,*) Nx
+        write(87,*) Ny
+        write(87,*) Nz
+        write(87,*) Lx
+        write(87,*) Ly
+        write(87,*) Lz
+        write(87,*) nprocx
+        write(87,*) nprocy
+        write(87,*) nmeshx
+        write(87,*) nmeshy
+        write(87,*) nmeshz
+      close(87)
+     end subroutine
+   end module
+   module init
+     use cdata
+     use mpi_var
+     contains
+     subroutine mesh_init
+       implicit none
+       integer :: i, j, k
+       allocate(Psi(-2:nmeshz+3,-2:nmeshy+3,-2:nmeshx+3))
+       allocate(xx(1:nmeshx),yy(1:nmeshy),zz(1:nmeshz))
+       allocate(rhs(1:nmeshz,1:nmeshy,1:nmeshx),w(1:nmeshz,1:nmeshy,1:nmeshx))
+       Psi=(0.,0.)
+       do k=1,nmeshz
+         zz(k)=real((2*k-1)/(2.*nmeshz))*Lz
+       end do
+       do j=1,nmeshy
+         yy(j)=real((2*j-1)/(2.*nmeshy))*Ly/dims(2)+coords(2)*Ly/dims(2)
+       end do
+       do i=1,nmeshx
+         xx(i)=real((2*i-1)/(2.*nmeshx))*Lx/dims(1)+coords(1)*Lx/dims(1)
+       end do
+       do i=1, nmeshx
+         do j=1, nmeshy
+           do k=1, nmeshz
+            Psi(k,j,i)=sin(xx(i)*pi/Lx)+sin(yy(j)*pi/Ly)
+           end do
+         end do
+       end do
+     end subroutine
+   end module
+   module ghost
+     use cdata
+     use mpi_var
+     implicit none
+     complex, allocatable :: ghost_l1(:,:), ghost_l2(:,:), ghost_l3(:,:) 
+     complex, allocatable :: ghost_l1_rec(:,:), ghost_l2_rec(:,:), ghost_l3_rec(:,:)
+     complex, allocatable :: ghost_r1(:,:), ghost_r2(:,:), ghost_r3(:,:)
+     complex, allocatable :: ghost_r1_rec(:,:), ghost_r2_rec(:,:), ghost_r3_rec(:,:)
+     complex, allocatable :: ghost_u1(:,:), ghost_u2(:,:), ghost_u3(:,:)
+     complex, allocatable :: ghost_u1_rec(:,:), ghost_u2_rec(:,:), ghost_u3_rec(:,:)
+     complex, allocatable :: ghost_d1(:,:), ghost_d2(:,:), ghost_d3(:,:)
+     complex, allocatable :: ghost_d1_rec(:,:), ghost_d2_rec(:,:), ghost_d3_rec(:,:)
+     integer :: lsend(6), rsend(6), lrec(6), rrec(6)
+     integer :: usend(6), dsend(6), urec(6), drec(6)
+     contains
+     subroutine ghost_init
+       implicit none
+        allocate(ghost_l1(nmeshz,nmeshy),ghost_l2(nmeshz,nmeshy),ghost_l3(nmeshz,nmeshy))
+        allocate(ghost_l1_rec(nmeshz,nmeshy),ghost_l2_rec(nmeshz,nmeshy),ghost_l3_rec(nmeshz,nmeshy))
+        allocate(ghost_r1(nmeshz,nmeshy),ghost_r2(nmeshz,nmeshy),ghost_r3(nmeshz,nmeshy))
+        allocate(ghost_r1_rec(nmeshz,nmeshy),ghost_r2_rec(nmeshz,nmeshy),ghost_r3_rec(nmeshz,nmeshy))
+        allocate(ghost_u1(nmeshz,nmeshx),ghost_u2(nmeshz,nmeshx),ghost_u3(nmeshz,nmeshx))
+        allocate(ghost_u1_rec(nmeshz,nmeshx),ghost_u2_rec(nmeshz,nmeshx),ghost_u3_rec(nmeshz,nmeshx))
+        allocate(ghost_d1(nmeshz,nmeshx),ghost_d2(nmeshz,nmeshx),ghost_d3(nmeshz,nmeshx))
+        allocate(ghost_d1_rec(nmeshz,nmeshx),ghost_d2_rec(nmeshz,nmeshx),ghost_d3_rec(nmeshz,nmeshx))
+     end subroutine
+     subroutine ghost_comm
+       implicit none
+       if (left/=MPI_PROC_NULL) then
+         !----------------send to the left-----------------
+         ghost_l1(1:nmeshz,1:nmeshy)=Psi(1:nmeshz,1:nmeshy,1)
+         ghost_l2(1:nmeshz,1:nmeshy)=Psi(1:nmeshz,1:nmeshy,2)
+         ghost_l3(1:nmeshz,1:nmeshy)=Psi(1:nmeshz,1:nmeshy,3)
+         call MPI_ISEND(ghost_l1,nmeshz*nmeshy,MPI_COMPLEX,left,tag,comm2D,lsend(1),ierror)
+         call MPI_ISEND(ghost_l2,nmeshz*nmeshy,MPI_COMPLEX,left,tag,comm2D,lsend(2),ierror)
+         call MPI_ISEND(ghost_l3,nmeshz*nmeshy,MPI_COMPLEX,left,tag,comm2D,lsend(3),ierror)
+       end if
+       if (right/=MPI_PROC_NULL) then
+         call MPI_IRECV(ghost_l1_rec,nmeshz*nmeshy,MPI_COMPLEX,right,tag,comm2D,lrec(1),ierror)
+         call MPI_IRECV(ghost_l2_rec,nmeshz*nmeshy,MPI_COMPLEX,right,tag,comm2D,lrec(2),ierror)
+         call MPI_IRECV(ghost_l3_rec,nmeshz*nmeshy,MPI_COMPLEX,right,tag,comm2D,lrec(3),ierror)
+       end if
+       if (left/=MPI_PROC_NULL) then
+         call MPI_WAIT(lsend(1),stat,ierror) ; call MPI_WAIT(lsend(2),stat,ierror) ; call MPI_WAIT(lsend(3),stat,ierror)
+       end if
+       if (right/=MPI_PROC_NULL) then
+         call MPI_WAIT(lrec(1),stat,ierror) ; call MPI_WAIT(lrec(2),stat,ierror) ;  call MPI_WAIT(lrec(3),stat,ierror)
+         !now implement these ghostzones
+         Psi(1:nmeshz,1:nmeshy,nmeshx+1)=ghost_l1_rec(:,:)
+         Psi(1:nmeshz,1:nmeshy,nmeshx+2)=ghost_l2_rec(:,:)
+         Psi(1:nmeshz,1:nmeshy,nmeshx+3)=ghost_l3_rec(:,:)
+       else
+         Psi(1:nmeshz,1:nmeshy,nmeshx+1:nmeshx+3)=(0.,0.) !zero boundaries
+       end if
+       !----------------send to the right-----------------
+       if (right/=MPI_PROC_NULL) then
+         ghost_r1(1:nmeshz,1:nmeshy)=Psi(1:nmeshz,1:nmeshy,nmeshx)
+         ghost_r2(1:nmeshz,1:nmeshy)=Psi(1:nmeshz,1:nmeshy,nmeshx-1)
+         ghost_r3(1:nmeshz,1:nmeshy)=Psi(1:nmeshz,1:nmeshy,nmeshx-2)
+         call MPI_ISEND(ghost_r1,nmeshz*nmeshy,MPI_COMPLEX,right,tag,comm2D,rsend(1),ierror)
+         call MPI_ISEND(ghost_r2,nmeshz*nmeshy,MPI_COMPLEX,right,tag,comm2D,rsend(2),ierror)
+         call MPI_ISEND(ghost_r3,nmeshz*nmeshy,MPI_COMPLEX,right,tag,comm2D,rsend(3),ierror)
+       end if
+       if (left/=MPI_PROC_NULL) then
+         call MPI_IRECV(ghost_r1_rec,nmeshz*nmeshy,MPI_COMPLEX,left,tag,comm2D,rrec(1),ierror)
+         call MPI_IRECV(ghost_r2_rec,nmeshz*nmeshy,MPI_COMPLEX,left,tag,comm2D,rrec(2),ierror)
+         call MPI_IRECV(ghost_r3_rec,nmeshz*nmeshy,MPI_COMPLEX,left,tag,comm2D,rrec(3),ierror)
+       end if
+       if (right/=MPI_PROC_NULL) then
+         call MPI_WAIT(rsend(1),stat,ierror) ; call MPI_WAIT(rsend(2),stat,ierror) ; call MPI_WAIT(rsend(3),stat,ierror)
+       end if
+       if (left/=MPI_PROC_NULL) then
+         call MPI_WAIT(rrec(1),stat,ierror) ; call MPI_WAIT(rrec(2),stat,ierror) ;  call MPI_WAIT(rrec(3),stat,ierror)
+         !now implement these ghostzones
+         Psi(1:nmeshz,1:nmeshy,0)=ghost_r1_rec(:,:)
+         Psi(1:nmeshz,1:nmeshy,-1)=ghost_r2_rec(:,:)
+         Psi(1:nmeshz,1:nmeshy,-2)=ghost_r3_rec(:,:)
+       else
+         Psi(1:nmeshz,1:nmeshy,-2:0)=(0.,0.) !zero boundaries
+       end if
+       !----------------send upwards---------------------
+       if (top/=MPI_PROC_NULL) then
+         ghost_u1(1:nmeshz,1:nmeshx)=Psi(1:nmeshz,1,1:nmeshx)
+         ghost_u2(1:nmeshz,1:nmeshx)=Psi(1:nmeshz,2,1:nmeshx)
+         ghost_u3(1:nmeshz,1:nmeshx)=Psi(1:nmeshz,3,1:nmeshx)
+         call MPI_ISEND(ghost_u1,nmeshz*nmeshx,MPI_COMPLEX,top,tag,comm2D,usend(1),ierror)
+         call MPI_ISEND(ghost_u2,nmeshz*nmeshx,MPI_COMPLEX,top,tag,comm2D,usend(2),ierror)
+         call MPI_ISEND(ghost_u3,nmeshz*nmeshx,MPI_COMPLEX,top,tag,comm2D,usend(3),ierror)
+       end if
+       if (bot/=MPI_PROC_NULL) then
+         call MPI_IRECV(ghost_u1_rec,nmeshz*nmeshx,MPI_COMPLEX,bot,tag,comm2D,urec(1),ierror)
+         call MPI_IRECV(ghost_u2_rec,nmeshz*nmeshx,MPI_COMPLEX,bot,tag,comm2D,urec(2),ierror)
+         call MPI_IRECV(ghost_u3_rec,nmeshz*nmeshx,MPI_COMPLEX,bot,tag,comm2D,urec(3),ierror)
+       end if
+       if (top/=MPI_PROC_NULL) then
+         call MPI_WAIT(usend(1),stat,ierror) ; call MPI_WAIT(usend(2),stat,ierror) ; call MPI_WAIT(usend(3),stat,ierror)
+       end if
+       if (bot/=MPI_PROC_NULL) then
+         call MPI_WAIT(urec(1),stat,ierror) ; call MPI_WAIT(urec(2),stat,ierror) ;  call MPI_WAIT(urec(3),stat,ierror)
+         !now implement these ghostzones
+         Psi(1:nmeshz,nmeshy+1,1:nmeshx)=ghost_u1_rec(:,:)
+         Psi(1:nmeshz,nmeshy+2,1:nmeshx)=ghost_u2_rec(:,:)
+         Psi(1:nmeshz,nmeshy+3,1:nmeshx)=ghost_u3_rec(:,:)
+       else
+         Psi(1:nmeshz,nmeshy+1:nmeshy+3,1:nmeshx)=(0.,0.) !zero boundaries
+       end if
+       !----------------send down---------------------
+       if (bot/=MPI_PROC_NULL) then
+         ghost_d1(1:nmeshz,1:nmeshx)=Psi(1:nmeshz,nmeshy,1:nmeshx)
+         ghost_d2(1:nmeshz,1:nmeshx)=Psi(1:nmeshz,nmeshy-1,1:nmeshx)
+         ghost_d3(1:nmeshz,1:nmeshx)=Psi(1:nmeshz,nmeshy-2,1:nmeshx)
+         call MPI_ISEND(ghost_d1,nmeshz*nmeshx,MPI_COMPLEX,bot,tag,comm2D,dsend(1),ierror)
+         call MPI_ISEND(ghost_d3,nmeshz*nmeshx,MPI_COMPLEX,bot,tag,comm2D,dsend(3),ierror)
+         call MPI_ISEND(ghost_d2,nmeshz*nmeshx,MPI_COMPLEX,bot,tag,comm2D,dsend(2),ierror)
+       end if
+       if (top/=MPI_PROC_NULL) then
+         call MPI_IRECV(ghost_d1_rec,nmeshz*nmeshx,MPI_COMPLEX,top,tag,comm2D,drec(1),ierror)
+         call MPI_IRECV(ghost_d2_rec,nmeshz*nmeshx,MPI_COMPLEX,top,tag,comm2D,drec(2),ierror)
+         call MPI_IRECV(ghost_d3_rec,nmeshz*nmeshx,MPI_COMPLEX,top,tag,comm2D,drec(3),ierror)
+       end if
+       if (bot/=MPI_PROC_NULL) then
+         call MPI_WAIT(dsend(1),stat,ierror) ; call MPI_WAIT(dsend(2),stat,ierror) ; call MPI_WAIT(dsend(3),stat,ierror)
+       end if
+       if (top/=MPI_PROC_NULL) then
+         call MPI_WAIT(drec(1),stat,ierror) ; call MPI_WAIT(drec(2),stat,ierror) ;  call MPI_WAIT(drec(3),stat,ierror)
+         !now implement these ghostzones
+         Psi(1:nmeshz,0,1:nmeshx)=ghost_d1_rec(:,:)
+         Psi(1:nmeshz,-1,1:nmeshx)=ghost_d2_rec(:,:)
+         Psi(1:nmeshz,-2,1:nmeshx)=ghost_d3_rec(:,:)
+       else
+         Psi(1:nmeshz,-2:0,1:nmeshx)=(0.,0.) !zero boundaries
+       end if
+       call MPI_BARRIER(comm2D,ierror)
+     end subroutine
+   end module
+   module diagnostic
+     use cdata
+     use mpi_var
+     implicit none
+     real :: maxPsi, minPsi
+     contains
+     subroutine Psi_info
+       implicit none
+       real :: maxPsi_loc, minPsi_loc
+       maxPsi_loc=maxval(abs(Psi(1:nmeshz,1:nmeshy,1:nmeshx)))
+       call MPI_REDUCE(maxPsi_loc,maxPsi,1,MPI_REAL,MPI_MAX,0,comm2d,ierror)
+       minPsi_loc=minval(abs(Psi(1:nmeshz,1:nmeshy,1:nmeshx)))
+       call MPI_REDUCE(minPsi_loc,minPsi,1,MPI_REAL,MPI_MIN,0,comm2d,ierror)
+     end subroutine
+   end module
+   !-----------------------------------
+   module finite_diff
+     use cdata
+     use ghost
+     use deriv
+     contains
+     subroutine get_rhs()
+     use deriv
+     implicit none
+     integer :: i , j , k
+     !-----------------------------------
+     call ghost_comm
+     do i=1, nmeshx
+       do j=1, nmeshy
+         do k=1, nmeshz
+         !Laplacian
+         rhs(k,j,i)=second_deriv(Psi(k,j,(i-3):(i+3)),hx)
+         rhs(k,j,i)=rhs(k,j,i)+second_deriv(Psi(k,(j-3):(j+3),i),hy)
+         rhs(k,j,i)=rhs(k,j,i)+second_deriv(Psi((k-3):(k+3),j,i),hz)
+         end do
+       end do
+     end do
+     end subroutine
+   end module
+   !-----------------------------------
+   program run
+   use cdata
+   use mpi_var
+   use output
+   use init
+   use ghost
+   use deriv
+   use diagnostic
+   use finite_diff
+   implicit none
+   integer :: k,j,i
+   call mpi_setup !mpi_var.f90
+  
+   call dims_print !output.f90
+   
+   call mesh_init !init.f90
+   
+   call ghost_init !ghost.f90
+   do itime=1,100
+     call Psi_info
+     if (rank==0.and.mod(itime,10)==0) then
+       print*, itime, t, maxPsi, minPsi
+     end if
+     !timestep using RK3 - low storage
+     call get_rhs !finite_diff.f90
+     w=dt*rhs
+     Psi(1:nmeshz,1:nmeshy,1:nmeshx)=Psi(1:nmeshz,1:nmeshy,1:nmeshx)+(w/3.)
+     call get_rhs
+     w=(-2./3.)*w+dt*rhs
+     Psi(1:nmeshz,1:nmeshy,1:nmeshx)=Psi(1:nmeshz,1:nmeshy,1:nmeshx)+w
+     call get_rhs
+     w=-w+dt*rhs
+     Psi(1:nmeshz,1:nmeshy,1:nmeshx)=Psi(1:nmeshz,1:nmeshy,1:nmeshx)+0.5*w
+     t=t+dt
+   end do !end itime loop
+   write(unit=print_file,fmt="(a,i2.2,a,i2.2,a)")"./data/proc",rank,"/var",print_number, ".dat"
+      open(unit=98,file=print_file,status='replace',form='unformatted',access='stream')
+      write(98) coords, t, Psi(1:nmeshz,1:nmeshy,1:nmeshx)
+   close(98)
+   call MPI_FINALIZE(ierror)
+end program
+
