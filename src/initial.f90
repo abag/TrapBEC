@@ -12,7 +12,6 @@ module initial
     character(len=40) :: restart_file
     logical :: can_restart_loc=.false.
     complex :: ring_p1, ring_p2
-
     allocate(Psi(-2:nmeshz+3,-2:nmeshy+3,-2:nmeshx+3))
     allocate(phase(-2:nmeshz+3,-2:nmeshy+3,-2:nmeshx+3))
     allocate(density(-2:nmeshz+3,-2:nmeshy+3,-2:nmeshx+3))
@@ -132,6 +131,8 @@ module initial
       call setup_lattice
     case('lattice2')
       call setup_lattice2
+    case('bundle')
+      call setup_bundle
     case default
       call emergency_stop('wrong initial conditions set')
     end select
@@ -147,19 +148,7 @@ module initial
     real :: translatex,translatey,translatez
     complex :: ring_p1, ring_p2
     integer :: i, j, k, v
-      do i=1, nmeshx
-        do j=1, nmeshy
-          do k=1, nmeshz
-            TF_dense=1.-(0.5*harm_wx*1.5/Lx**2)*(xx(i))**2 &
-                         -(0.5*harm_wy*1.5/Ly**2)*(yy(j))**2 &
-                         -(0.5*harm_wz*1.5/Lz**2)*(zz(k))**2
-            TF_dense=TF_dense/sqrt(2.)
-            if (TF_dense<0.) TF_dense=0.
-            Psi(k,j,i)=cmplx(TF_dense,TF_dense)
-            Psi(k,j,i)=(1.,1.)
-          end do
-        end do
-      end do
+    call setup_thomas_fermi
       do v=1,vor_ring_count
       if (rank==0) then
         anglex=0.
@@ -273,7 +262,10 @@ module initial
     integer :: v1, v2
     real :: vort_pos(2) !position of vortex in xy-plane
     real :: r, theta, func !to insert a vortex
-      Psi(:,:,:)=(1.,1.)
+    real :: TF_dense
+      !initialise thomas fermi profile
+      call setup_thomas_fermi
+      !Psi(:,:,:)=(1.,1.)
       do v1=1,3
       do v2=1,3
       vort_pos(1)=v1*(Lx/4.)-Lx/2.
@@ -307,6 +299,81 @@ module initial
       end do
       end do ; end do
   end subroutine
+    !----------------------------------------------------------
+  subroutine setup_bundle
+    implicit none
+    integer :: i, j, k
+    integer :: v1, v2
+    real :: rpos, thetapos
+    real :: vort_pos(2) !position of vortex in xy-plane
+    real :: r, theta, func !to insert a vortex
+    real :: TF_dense
+      !initialise thomas fermi profile
+      call setup_thomas_fermi
+      !now put in the first bundle
+      do v1=1,7
+      if (v1==1) then
+        rpos=0. ; thetapos=0. ;
+      else
+        rpos=10. ; thetapos=real(v1-2)*2.*pi/6.
+      end if
+      vort_pos(1)=rpos*cos(thetapos)-30.
+      vort_pos(2)=rpos*sin(thetapos)
+      do i=1, nmeshx
+        do j=1, nmeshy
+          do k=1, nmeshz
+              r=sqrt((xx(i)-vort_pos(1))**2+(yy(j)-vort_pos(2))**2)
+              theta=atan2(yy(j)-vort_pos(2),xx(i)-vort_pos(1))
+              func=1.-exp(-0.7*r**1.15)
+              tmp(k,j,i)=func*exp(eye*theta)
+              Psi(k,j,i)=Psi(k,j,i)*tmp(k,j,i)
+          end do
+        end do
+      end do
+      end do
+      !second bundle
+      do v1=1,7
+      if (v1==1) then
+        rpos=0. ; thetapos=0. ;
+      else
+        rpos=10. ; thetapos=real(v1-2)*2.*pi/6.
+      end if
+      vort_pos(1)=rpos*cos(thetapos)
+      vort_pos(2)=rpos*sin(thetapos)-30.
+      do i=1, nmeshx
+        do j=1, nmeshy
+          do k=1, nmeshz
+              r=sqrt((xx(i)-vort_pos(1))**2+(zz(k)-vort_pos(2))**2)
+              theta=atan2(zz(k)-vort_pos(2),xx(i)-vort_pos(1))
+              func=1.-exp(-0.7*r**1.15)
+              tmp(k,j,i)=func*exp(eye*theta)
+              Psi(k,j,i)=Psi(k,j,i)*tmp(k,j,i)
+          end do
+        end do
+      end do
+      end do
+      !third bundle
+      do v1=1,7
+      if (v1==1) then
+        rpos=0. ; thetapos=0. ;
+      else
+        rpos=10. ; thetapos=real(v1-2)*2.*pi/6.
+      end if
+      vort_pos(1)=rpos*cos(thetapos)-30.
+      vort_pos(2)=rpos*sin(thetapos)
+      do i=1, nmeshx
+        do j=1, nmeshy
+          do k=1, nmeshz
+              r=sqrt((yy(j)-vort_pos(1))**2+(zz(k)-vort_pos(2))**2)
+              theta=atan2(zz(k)-vort_pos(2),yy(j)-vort_pos(1))
+              func=1.-exp(-0.7*r**1.15)
+              tmp(k,j,i)=func*exp(eye*theta)
+              Psi(k,j,i)=Psi(k,j,i)*tmp(k,j,i)
+          end do
+        end do
+      end do
+      end do
+  end subroutine
   !----------------------------------------------------------
   subroutine setup_line_of_lines
     implicit none
@@ -317,25 +384,25 @@ module initial
     real :: vort_pos(2) !position of vortex in xy-plane
     real :: r, theta, func !to insert a vortex
     Psi=cmplx(1/sqrt(2.),1/sqrt(2.))
-      do v1=1,vor_line_count
-      vort_pos(1)=-Lx/2.+(real(v1)/(vor_line_count+1))*Lx
-      vort_pos(2)=0.
-      do i=1, nmeshx
-        do j=1, nmeshy
-          do k=1, nmeshz
-              r=sqrt((xx(i)-vort_pos(1))**2+(yy(j)-vort_pos(2))**2)
-              theta=atan2(yy(j)-vort_pos(2),xx(i)-vort_pos(1))
-              func=1.-exp(-0.7*r**1.15)
-              if (mod(v1,2)==0) then
-               tmp(k,j,i)=func*exp(eye*theta)
-              else
-               tmp(k,j,i)=func*exp(-eye*theta)
-              end if
-              Psi(k,j,i)=Psi(k,j,i)*tmp(k,j,i)
-          end do
-        end do
-      end do
-      end do
+    !  do v1=1,vor_line_count
+    !  vort_pos(1)=-Lx/2.+(real(v1)/(vor_line_count+1))*Lx
+    !  vort_pos(2)=0.
+    !  do i=1, nmeshx
+    !    do j=1, nmeshy
+    !      do k=1, nmeshz
+    !          r=sqrt((xx(i)-vort_pos(1))**2+(yy(j)-vort_pos(2))**2)
+    !          theta=atan2(yy(j)-vort_pos(2),xx(i)-vort_pos(1))
+    !          func=1.-exp(-0.7*r**1.15)
+    !          if (mod(v1,2)==0) then
+    !           tmp(k,j,i)=func*exp(eye*theta)
+    !          else
+    !           tmp(k,j,i)=func*exp(-eye*theta)
+    !          end if
+    !          Psi(k,j,i)=Psi(k,j,i)*tmp(k,j,i)
+    !      end do
+    !    end do
+    !  end do
+    !  end do
       translatex=-Lx/2.+5
       translatey=0.
       translatez=0.
@@ -392,7 +459,7 @@ module initial
         end do
       end do
   end subroutine
-!----------------------------------------------------------
+  !----------------------------------------------------------
   real function ring_density(r)
     real, intent(IN) :: r
     real :: c1, c2, c3
@@ -401,6 +468,24 @@ module initial
     c2=c1*(c3-0.25)
     ring_density=sqrt((r**2)*(c1+c2*r**2)/(1+c3*r**2+c2*r**4))
   end function
+  !----------------------------------------------------------
+  subroutine setup_thomas_fermi
+    implicit none
+    real :: TF_dense
+    integer :: i, j, k
+      do i=1, nmeshx
+        do j=1, nmeshy
+          do k=1, nmeshz
+            TF_dense=1.-(0.5*harm_wx*1.5/Lx**2)*(xx(i))**2 &
+                         -(0.5*harm_wy*1.5/Ly**2)*(yy(j))**2 &
+                         -(0.5*harm_wz*1.5/Lz**2)*(zz(k))**2
+            TF_dense=TF_dense/sqrt(2.)
+            if (TF_dense<0.) TF_dense=0.
+            Psi(k,j,i)=cmplx(TF_dense,TF_dense)
+          end do
+        end do
+      end do
+  end subroutine
   !----------------------------------------------------------
   subroutine reload_data
     implicit none
