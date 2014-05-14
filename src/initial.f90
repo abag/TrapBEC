@@ -98,7 +98,8 @@ module initial
               r=sqrt((xx(i)-vort_pos(1))**2+(yy(j)-vort_pos(2))**2)
               theta=atan2(yy(j)-vort_pos(2),xx(i)-vort_pos(1))
               func=1.-exp(-0.7*r**1.15)
-              Psi(k,j,i)=func*exp(eye*theta)
+              !Psi(k,j,i)=func*exp(winding_number*eye*theta)
+              Psi(k,j,i)=exp(winding_number*eye*theta)
           end do
         end do
       end do
@@ -403,7 +404,7 @@ module initial
     !    end do
     !  end do
     !  end do
-      translatex=-Lx/2.+5
+      translatex=0.
       translatey=0.
       translatez=0.
       do i=1, nmeshx
@@ -431,20 +432,22 @@ module initial
     real :: r, theta, func !to insert a vortex
       translatex=0.
       translatey=0.
-      translatez=ring_rad*1.5
+      translatez=ring_rad*0.
+      print*, translatez
       do i=1, nmeshx
         do j=1, nmeshy
           do k=1, nmeshz
-              theta=atan2(xx(i)-translatex,sqrt(yy(j)**2+zz(k)**2)+ring_rad)
-              r=sqrt((xx(i)-translatex)**2+(sqrt(yy(j)**2+zz(k)**2)+ring_rad)**2)
+              theta=atan2(xx(i)-translatex,sqrt(yy(j)**2+(zz(k)-translatez)**2)+ring_rad)
+              r=sqrt((xx(i)-translatex)**2+(sqrt(yy(j)**2+(zz(k)-translatez)**2)+ring_rad)**2)
               ring_p1=ring_density(r)*exp(eye*theta)
-              theta=atan2(xx(i)-translatex,sqrt(yy(j)**2+zz(k)**2)-ring_rad)
-              r=sqrt((xx(i)-translatex)**2+(sqrt(yy(j)**2+zz(k)**2)-ring_rad)**2)
+              theta=atan2(xx(i)-translatex,sqrt(yy(j)**2+(zz(k)-translatez)**2)-ring_rad)
+              r=sqrt((xx(i)-translatex)**2+(sqrt(yy(j)**2+(zz(k)-translatez)**2)-ring_rad)**2)
               ring_p2=ring_density(r)*exp(eye*theta)
               Psi(k,j,i)=ring_p1*conjg(ring_p2)
           end do
         end do
       end do
+      translatez=ring_rad*1.2
       do i=1, nmeshx
         do j=1, nmeshy
           do k=1, nmeshz
