@@ -1,0 +1,26 @@
+!/* vim: set filetype=fortran : */
+real  :: Lx=256., Ly=256., Lz=256.
+integer, parameter :: Nx=256, Ny=256, Nz=256
+real :: dt=0.005
+integer, parameter :: shots=10
+integer, parameter :: nsteps=100
+character(len=*), parameter :: boundaries='solid'
+logical, parameter :: periodicz=.false.
+character(len=*), parameter :: init_cond='constant'
+character(len=*), parameter :: potential='harmonic'
+real, parameter :: harm_wx=4., harm_wy=4., harm_wz=6. !trapping potentials set
+real, parameter :: potential_off=huge(1.)
+logical, parameter :: two_dim=.true.
+!----------------vortex_lines------------
+integer, parameter :: winding_number=10
+!----------------vortex_rings------------
+integer, parameter :: vor_ring_count=1
+real,parameter :: ring_rad=10. 
+!----------------vortex_lines------------
+integer, parameter :: vor_line_count=5
+!----------------imaginary time----------
+logical, parameter :: imaginary_time=.true.
+integer, parameter :: imag_nsteps=500
+!-----------------forcing----------------
+logical, parameter :: forcing=.true.
+integer, parameter :: force_freq=10
