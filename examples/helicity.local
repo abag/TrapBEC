@@ -1,0 +1,24 @@
+!/* vim: set filetype=fortran : */
+real  :: Lx=64., Ly=64., Lz=64.
+integer, parameter :: Nx=256, Ny=256, Nz=256
+real :: dt=0.0075
+integer, parameter :: shots=50
+integer, parameter :: nsteps=100000
+character(len=*), parameter :: boundaries='solid'
+logical, parameter :: periodicz=.false.
+character(len=*), parameter :: init_cond='linked_rings'
+character(len=*), parameter :: potential='zero'
+real, parameter :: harm_wx=6., harm_wy=6., harm_wz=6. !trapping potentials set
+real, parameter :: potential_off=huge(1.)
+logical, parameter :: two_dim=.false.
+!----------------vortex_lines------------
+integer, parameter :: winding_number=10
+!----------------vortex_rings------------
+integer, parameter :: vor_ring_count=1
+real,parameter :: ring_rad=10. 
+!----------------vortex_lines------------
+integer, parameter :: vor_line_count=5
+!----------------imaginary time----------
+logical, parameter :: imaginary_time=.false.
+integer, parameter :: imag_nsteps=1
+!----------------------------------------

@@ -22,8 +22,8 @@ default: run.x
 #
 # Targets
 #
-run.x: run.f90 cdata.o mpi_var.o statistics.o initial.o ghost.o deriv.o finite_diff.o output.o diagnostic.o Makefile
-	$(F90) $(FFLAGS) -o ./run.x run.f90 statistics.o cdata.o mpi_var.o initial.o ghost.o deriv.o finite_diff.o output.o diagnostic.o #remesh.o
+run.x: run.f90 cdata.o mpi_var.o statistics.o initial.o ghost.o deriv.o finite_diff.o output.o diagnostic.o force.o Makefile
+	$(F90) $(FFLAGS) -o ./run.x run.f90 statistics.o cdata.o mpi_var.o initial.o ghost.o deriv.o finite_diff.o output.o diagnostic.o force.o #remesh.o
 #
 #
 clean: 
@@ -50,6 +50,8 @@ statistics.o: statistics.f90 cdata.o
 finite_diff.o: finite_diff.f90 mpi_var.o deriv.o cdata.o
 #
 initial.o: initial.f90 statistics.o cdata.o
+#
+force.o: force.f90 statistics.o cdata.o
 #
 diagnostic.o: diagnostic.f90 cdata.o deriv.o
 #

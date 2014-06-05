@@ -7,6 +7,7 @@ module output
   contains
   !---------------------------------------------
   subroutine initial_print
+    implicit none
     if (rank==0) then
       write(*,*) 'TrapBEC code initialised'
       write(*,'(a,i4.4,a,i4.4,a,i4.4,a)') ' Running a ',Nx,'x',Ny,'x',Nz,' GPE simulation'

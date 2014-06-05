@@ -2,7 +2,7 @@ module initial
   use cdata
   use statistics
   use mpi_var
-  complex, allocatable :: tmp(:,:,:) !helper array 
+  complex, allocatable,private:: tmp(:,:,:) !helper array
   contains
   subroutine mesh_init
     implicit none

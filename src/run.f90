@@ -8,12 +8,14 @@ program run
    use diagnostic
    use finite_diff
    use statistics
+   use force
    implicit none
    call mpi_setup !mpi_var.f90
    call dims_print !output.f90
    call initial_print !output.f90
    call mesh_init !init.f90
    call ghost_init !ghost.f90
+   if (forcing) call initialise_tempory_force_array !force.f90
    if ((can_restart.eqv..false.).and.(imaginary_time.eqv..true.)) then
      do itime=1, imag_nsteps
         call get_rhs
@@ -54,7 +56,15 @@ program run
        !call get_qpressure !diagnostic.f90
        call var_print !output.f90
      end if
-     !----------------------------
+     !-------------forcing---------
+     if (forcing) then
+       if (mod(itime,force_freq)==0) then
+         call force_random_points
+       end if
+     end if
+     !-----------------------------
+
+
    end do !end itime loop
    time_per_timestep=time_per_timestep/nsteps
    call print_timing !output.f90
