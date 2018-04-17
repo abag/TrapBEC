@@ -1,6 +1,6 @@
 !/* vim: set filetype=fortran : */
-real  :: Lx=128., Ly=128., Lz=128
-integer, parameter :: Nx=128, Ny=128, Nz=128
+real  :: Lx=128., Ly=128., Lz=1
+integer, parameter :: Nx=128, Ny=128, Nz=1
 complex :: dt=0.05
 integer, parameter :: shots=100
 integer, parameter :: nsteps=100000
@@ -8,10 +8,10 @@ character(len=*), parameter :: boundaries='zero'
 logical, parameter :: periodicz=.true.
 character(len=*), parameter :: init_cond='constant'
 character(len=*), parameter :: potential='quartic'
-real, parameter :: harm_wx=800, harm_wy=8, harm_wz=0. !trapping potentials set
+real, parameter :: harm_wx=800, harm_wy=8, harm_wz=6. !trapping potentials set
 real, parameter :: potential_off=huge(1.)
 real, parameter :: gamma=0.001 !dissipation
-logical, parameter :: two_dim=.false.
+logical, parameter :: two_dim=.true.
 logical, parameter :: phase_imprint_on=.false.
 !----------------lasers------------
 logical, parameter :: lbeam=.true.
@@ -32,8 +32,7 @@ logical, parameter :: add_dipole=.false.
 integer, parameter :: vor_line_count=100
 !----------------imaginary time----------
 logical, parameter :: imaginary_time=.true.
-!integer, parameter :: imag_nsteps=50000
-integer, parameter :: imag_nsteps=2000
+integer, parameter :: imag_nsteps=50000
 !-----------------forcing----------------
 logical, parameter :: forcing=.false.
 integer, parameter :: force_freq=10

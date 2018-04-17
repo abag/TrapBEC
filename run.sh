@@ -34,11 +34,11 @@ EOF
 }
 run() {
   echo Running job...
-  /usr/bin/time -p openmpiexec -n $NPROCS $EXE
+  /usr/bin/time -p mpiexec -n $NPROCS $EXE
 }
 run_quiet() {
   echo Running job quietly...
-  nohup /usr/bin/time -p openmpiexec -n $NPROCS $EXE &> $LOGFILE &
+  nohup /usr/bin/time -p mpiexec -n $NPROCS $EXE &> $LOGFILE &
 }
 COMPILE=0
 QUIET=0

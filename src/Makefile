@@ -1,5 +1,5 @@
-F90=openmpif90
-FFLAGS=-O3   # SP/ 3rd level of optimisation
+F90=mpif90
+FFLAGS=-O3 # SP/ 3rd level of optimisation
    #
    #  -pg   =  profiler (gprof)
    #  -g    = debugger  (gdb)

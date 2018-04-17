@@ -23,6 +23,7 @@ program run
         call Psi_norm ; imag_Psiratio=intPsi2/intPsi2_old ; intPsi2_old=intPsi2
         !Psi=Psi*(intPsi2_old/intPsi2)
         !could put something in here to leave if ratio is close to unity
+        if (phase_imprint_on) call phase_imprint
         if (mod(itime,shots)==0.and.rank==0) then
            print*, itime/shots, imag_Psiratio
         end if
@@ -30,6 +31,12 @@ program run
      if (rank==0) write(*,*) 'finished imaginary time propagation'
    end if
    call MPI_BARRIER(comm2D,ierror)
+   if (add_pcurrent) call setup_pcurrent !init.f90
+   !call add_noise !init.f90
+   if (add_ring) call setup_add_ring !init.f90
+   if (add_dipole) call setup_add_dipole !init.f90
+   call MPI_BARRIER(comm2D,ierror)
+   dt=dt*(1.-gamma*eye)
    do itime=nstart,nsteps
      !timestep using RK3 - low storage
      CALL CPU_TIME(timing_t1)
@@ -52,8 +59,8 @@ program run
          print*, itime/shots, t, maxPsi, minPsi, meanPsi, intPsi2
        end if
        call ghost_comm !ghost.f90
-       !call get_phase !diagnostic.f90
-       !call get_qpressure !diagnostic.f90
+       if (vel_print) call get_phase !diagnostic.f90
+       if (qpress_print) call get_qpressure !diagnostic.f90
        call var_print !output.f90
      end if
      !-------------forcing---------
@@ -63,8 +70,6 @@ program run
        end if
      end if
      !-----------------------------
-
-
    end do !end itime loop
    time_per_timestep=time_per_timestep/nsteps
    call print_timing !output.f90

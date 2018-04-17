@@ -34,11 +34,21 @@ module force
             do k=1, nmeshz
                 r=sqrt((xx(i)-vort_pos(1))**2+(yy(j)-vort_pos(2))**2)
                 theta=atan2(yy(j)-vort_pos(2),xx(i)-vort_pos(1))
-                func=1.-exp(-0.7*r**1.15)
+                !func=1.-exp(-0.7*r**1.15)
+                func=pade_density(r)
                 ftmp(k,j,i)=func*exp(dir*eye*theta)
                 Psi(k,j,i)=Psi(k,j,i)*ftmp(k,j,i)
             end do
           end do
         end do
   end subroutine
+  real function pade_density(r)
+    implicit none
+    real, intent(IN) :: r
+    real :: c1, c2, c3
+    c1=11./32.
+    c3=(5.-32.*c1)/(48.-192*c1)
+    c2=c1*(c3-0.25)
+    pade_density=sqrt((r**2)*(c1+c2*r**2)/(1+c3*r**2+c2*r**4))
+  end function
 end module

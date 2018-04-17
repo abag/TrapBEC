@@ -9,6 +9,13 @@ module deriv
     real,intent(IN) :: h
     first_deriv=(-vect(-3)+9*vect(-2)-45*vect(-1)+45*vect(1)-9*vect(2)+vect(3))/(60*h)
   end function
+  complex function cmplx_first_deriv(vect,h) !real function as used for gradient of phase
+    !TAKE THE 1ST DERIVATIVE OF THE VECT ARRAY
+    implicit none
+    complex, intent(IN) :: vect(-3:3)
+    real,intent(IN) :: h
+    cmplx_first_deriv=(-vect(-3)+9*vect(-2)-45*vect(-1)+45*vect(1)-9*vect(2)+vect(3))/(60*h)
+  end function
   complex function second_deriv(vect,h) !complex function 
     !TAKE THE 2ND DERIVATIVE OF THE VECT ARRAY
     implicit none

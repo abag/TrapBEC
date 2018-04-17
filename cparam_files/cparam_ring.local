@@ -1,39 +1,32 @@
 !/* vim: set filetype=fortran : */
-real  :: Lx=128., Ly=128., Lz=128
+real  :: Lx=128., Ly=128., Lz=128.
 integer, parameter :: Nx=128, Ny=128, Nz=128
-complex :: dt=0.05
+real :: dt=0.025
 integer, parameter :: shots=100
-integer, parameter :: nsteps=100000
-character(len=*), parameter :: boundaries='zero'
-logical, parameter :: periodicz=.true.
+integer, parameter :: nsteps=400000
+character(len=*), parameter :: boundaries='solid'
+logical, parameter :: periodicz=.false.
 character(len=*), parameter :: init_cond='constant'
-character(len=*), parameter :: potential='quartic'
-real, parameter :: harm_wx=800, harm_wy=8, harm_wz=0. !trapping potentials set
+character(len=*), parameter :: potential='sphere'
+real, parameter :: harm_wx=200, harm_wy=8, harm_wz=6. !trapping potentials set
 real, parameter :: potential_off=huge(1.)
-real, parameter :: gamma=0.001 !dissipation
-logical, parameter :: two_dim=.false.
-logical, parameter :: phase_imprint_on=.false.
-!----------------lasers------------
-logical, parameter :: lbeam=.true.
-logical, parameter :: add_pcurrent=.false.
-real, parameter :: wbeam=4.
-!----------------reference frame----------
 real, parameter :: advective_vx=0.
-real, parameter :: omega_z=0.025
-real, parameter :: t_spindown=0.001
+logical, parameter :: two_dim=.false.
+!----------------lasers------------
+logical, parameter :: lbeam=.false.
+logical, parameter :: add_pcurrent=.false.
+real, parameter :: wbeam=8.
 !----------------vortex_lines------------
 integer, parameter :: winding_number=10
 !----------------vortex_rings------------
 integer, parameter :: vor_ring_count=1
-real,parameter :: ring_rad=10.
-logical, parameter :: add_ring=.false.
-logical, parameter :: add_dipole=.false.
+real,parameter :: ring_rad=10. 
+logical, parameter :: add_ring=.true.
 !----------------vortex_lines------------
-integer, parameter :: vor_line_count=100
+integer, parameter :: vor_line_count=5
 !----------------imaginary time----------
 logical, parameter :: imaginary_time=.true.
-!integer, parameter :: imag_nsteps=50000
-integer, parameter :: imag_nsteps=2000
+integer, parameter :: imag_nsteps=1000
 !-----------------forcing----------------
 logical, parameter :: forcing=.false.
 integer, parameter :: force_freq=10
@@ -41,4 +34,4 @@ integer, parameter :: force_freq=10
 logical, parameter :: full_binary_output=.true.
 logical, parameter :: gnuplot_2d_print=.false.
 logical, parameter :: qpress_print=.false.
-logical, parameter :: vel_print=.false.
+logical, parameter :: vel_print=.true.

@@ -32,8 +32,7 @@ logical, parameter :: add_dipole=.false.
 integer, parameter :: vor_line_count=100
 !----------------imaginary time----------
 logical, parameter :: imaginary_time=.true.
-!integer, parameter :: imag_nsteps=50000
-integer, parameter :: imag_nsteps=2000
+integer, parameter :: imag_nsteps=50000
 !-----------------forcing----------------
 logical, parameter :: forcing=.false.
 integer, parameter :: force_freq=10

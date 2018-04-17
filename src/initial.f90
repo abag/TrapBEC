@@ -3,12 +3,13 @@ module initial
   use statistics
   use mpi_var
   complex, allocatable,private:: tmp(:,:,:) !helper array
+  real, allocatable,private:: mobius(:,:,:) !helper array
   contains
   subroutine mesh_init
     implicit none
-    integer :: i, j, k
+    integer :: i, j, k, ii1, ii2
     real :: vort_pos(2), vort_pos2(2) !position of vortex in xy-plane
-    real :: r, theta, func !to insert a vortex
+    real :: r, theta, func, ldense !to insert a vortex
     character(len=40) :: restart_file
     logical :: can_restart_loc=.false.
     complex :: ring_p1, ring_p2
@@ -16,15 +17,16 @@ module initial
     allocate(phase(-2:nmeshz+3,-2:nmeshy+3,-2:nmeshx+3))
     allocate(density(-2:nmeshz+3,-2:nmeshy+3,-2:nmeshx+3))
     allocate(laplace_rho(0:nmeshz+1,0:nmeshy+1,0:nmeshx+1))
+    allocate(Trap(1:nmeshz,1:nmeshy,1:nmeshx))
     allocate(qpressure(1:nmeshz,1:nmeshy,1:nmeshx,3))
     allocate(vel(1:nmeshz,1:nmeshy,1:nmeshx,3))
     allocate(xx(1:nmeshx),yy(1:nmeshy),zz(1:nmeshz))
     allocate(rhs(1:nmeshz,1:nmeshy,1:nmeshx),w(1:nmeshz,1:nmeshy,1:nmeshx))
     allocate(tmp(1:nmeshz,1:nmeshy,1:nmeshx))
-    hx=Lx/Nx ; hy=Lx/Ny ; hz=Lz/Nz
+    hx=Lx/Nx ; hy=Ly/Ny ; hz=Lz/Nz
     Psi=(0.,0.) !zero for now
     !how about the timestep 
-    if (dt>(1./8.)*(min(hx,hy,hz)**2)) then
+    if (real(dt)>(1./8.)*(min(hx,hy,hz)**2)) then
       if (rank==0) print*, 'WARNING TIMESTEP IS PROBABLY TOO LARGE!'
     else
       if (rank==0) print*, 'dt is below upper-limit of', (1./8.)*(min(hx,hy,hz)**2)
@@ -62,14 +64,29 @@ module initial
           end do
         end do
       end do
-    case('random_phase')
+      case('soliton')
+      call setup_thomas_fermi
       do i=1, nmeshx
-        do j=1, nmeshy
-          do k=1, nmeshz
-            Psi(k,j,i)=exp(eye*runif(0.,2.*pi))
-          end do
-        end do
+      do j=1, nmeshy
+      do k=1, nmeshz
+        ldense=abs(Psi(k,j,i))
+        if (xx(i)<0.) then
+          Psi(k,j,i)=ldense*exp(eye*0.)
+        else
+          Psi(k,j,i)=ldense*exp(eye*pi)
+        end if
       end do
+      end do
+      end do
+    case('random_phase')
+      !do i=1, nmeshx
+      !  do j=1, nmeshy
+      !    do k=1, nmeshz
+      !      Psi(k,j,i)=exp(eye*runif(0.,2.*pi))
+      !    end do
+      !  end do
+      !end do
+      call setup_quench
     case('crow')
       vort_pos(2)=-Ly/4. ; vort_pos2(2)=-Ly/4.
       do i=1, nmeshx
@@ -98,8 +115,7 @@ module initial
               r=sqrt((xx(i)-vort_pos(1))**2+(yy(j)-vort_pos(2))**2)
               theta=atan2(yy(j)-vort_pos(2),xx(i)-vort_pos(1))
               func=1.-exp(-0.7*r**1.15)
-              !Psi(k,j,i)=func*exp(winding_number*eye*theta)
-              Psi(k,j,i)=exp(winding_number*eye*theta)
+              Psi(k,j,i)=func*exp(winding_number*eye*theta)
           end do
         end do
       end do
@@ -122,6 +138,8 @@ module initial
       end do
     case('random_points')
       call setup_random_points
+    case('leap_frog')
+      call setup_leap_frog
     case('vortex_rings')
       call setup_vortex_rings
     case('line_of_lines')
@@ -138,26 +156,75 @@ module initial
       call emergency_stop('wrong initial conditions set')
     end select
     deallocate(tmp)
+    select case(potential)
+      case('mobius')
+      allocate(mobius(200,200,3))
+      do i=1,200
+      do j=1,200
+        r=real(i-1)*2./200-1
+        theta=real(j-1)*2.*pi/200
+        mobius(i,j,1)=(25.+5*r*cos(theta/2))*cos(theta)
+        mobius(i,j,2)=(25.+5*r*cos(theta/2))*sin(theta)
+        mobius(i,j,3)=5*r*sin(theta/2)
+      end do
+      end do
+      Trap=0.
+
+      do i=1, nmeshx
+      do j=1, nmeshy
+      do k=1, nmeshz
+      do ii1=1, 200
+      do ii2=1, 200
+         Trap(k,j,i)=Trap(k,j,i)+exp(-1.5*(xx(i)-mobius(ii1,ii2,1))**2-&
+         1.5*(yy(j)-mobius(ii1,ii2,2))**2-1.5*(zz(k)-mobius(ii1,ii2,3))**2);
+         if (Trap(k,j,i)>3.) Trap(k,j,i)=3.
+      end do
+      end do
+      end do
+      end do
+      end do
+      deallocate(mobius)
+      r=maxval(Trap)
+      print*, rank, maxval(Trap), minval(Trap)
+      call MPI_REDUCE(r,theta,1,MPI_REAL,MPI_MAX,0,comm2d,ierror)
+      call MPI_BCAST(theta, 1, MPI_REAL, 0,comm2d,ierror)
+      do i=1, nmeshx
+      do j=1, nmeshy
+      do k=1, nmeshz
+         Trap(k,j,i)=theta-Trap(k,j,i)
+      end do
+      end do
+      end do
+ print*, rank, maxval(Trap), minval(Trap)
+    end select
   end subroutine
   !----------------------------------------------------------
   subroutine setup_vortex_rings
     implicit none
     real :: r, theta
     real :: TF_dense
+    real :: transtheta, transu, transr
     real :: anglex, angley, anglez
     real :: temp_x, temp_y, temp_z
     real :: translatex,translatey,translatez
     complex :: ring_p1, ring_p2
     integer :: i, j, k, v
-    call setup_thomas_fermi
+    !call setup_thomas_fermi
+    Psi=1.
       do v=1,vor_ring_count
       if (rank==0) then
-        anglex=0.
-        angley=runif(0.,2.*pi)
-        anglez=runif(0.,2.*pi)
-        translatex=runif(-Lx/4,Lx/4)
-        translatey=runif(-Ly/4,Ly/4)
-        translatez=runif(-Lz/4,Lz/4)
+        anglex=runif(0.,0.)
+        angley=runif(0.,2*pi)
+        anglez=runif(0.,2*pi)
+        transu=runif(-1.,1.)
+        transtheta=runif(0.,2*pi)
+        transr=runif(0.,Lx/6) !abs(rnorm(0.,(Lx/8)**2))
+        translatex=transr*sqrt(1-transu**2)*cos(transtheta)
+        translatey=transr*sqrt(1-transu**2)*sin(transtheta)
+        translatez=transr*transu
+        !translatex=runif(-Lx/10,Lx/10)
+        !translatey=runif(-Ly/10,Ly/10)
+        !translatez=runif(-Lz/10,Lz/10)
       end if
       !now broadcast these angles across procs
       call MPI_BCAST(anglex, 1, MPI_REAL, 0,comm2d,ierror)
@@ -204,12 +271,13 @@ module initial
     real :: vort_pos(2) !position of vortex in xy-plane
     real :: r, theta, func !to insert a vortex
     real :: dir
-      Psi(:,:,:)=(1.,1.)
-      do v1=1,100
+      Psi(:,:,:)=(0.7071,0.7071)
+      do v1=1,20
         if (rank==0) then
-          vort_pos(1)=runif(-Lx/4.,Lx/4.)
-          vort_pos(2)=runif(-Ly/4.,Ly/4.)
-          dir=runif(0.,1.)
+          vort_pos(1)=runif(-Lx/5.,Lx/5.)
+          vort_pos(2)=runif(-Ly/5.,Ly/5.)
+          !dir=runif(0.,1.)
+          dir=runif(.9,1.) !make them all postive
           if (dir<0.5) then
             dir=-1.
           else
@@ -233,19 +301,113 @@ module initial
       end do
   end subroutine
   !----------------------------------------------------------
+  subroutine setup_leap_frog
+    implicit none
+    integer :: i, j, k
+    integer :: v1
+    real :: vort_pos(2) !position of vortex in xy-plane
+    real :: r, theta, func !to insert a vortex
+    real :: dir
+    real :: shifth=3, shiftv1=3, shiftv2=12
+      Psi(:,:,:)=(0.7071,0.7071)
+      do v1=1,4
+        if (rank==0) then
+          if (v1==1) then
+            vort_pos(1)=-shifth ; vort_pos(2)=shiftv1 ; dir=1
+          else if (v1==2) then
+            vort_pos(1)=shifth ; vort_pos(2)=shiftv2 ; dir=1
+          else if (v1==3) then
+            vort_pos(1)=-shifth ; vort_pos(2)=-shiftv1 ; dir=-1
+          else
+            vort_pos(1)=shifth ; vort_pos(2)=-shiftv2 ; dir=-1
+          end if
+        end if
+        !now broadcast these quantities across procs
+        call MPI_BCAST(vort_pos, 2, MPI_REAL, 0,comm2d,ierror)
+        call MPI_BCAST(dir, 1, MPI_REAL, 0,comm2d,ierror)
+        do i=1, nmeshx
+          do j=1, nmeshy
+            do k=1, nmeshz
+                r=sqrt((xx(i)-vort_pos(1))**2+(yy(j)-vort_pos(2))**2)
+                theta=atan2(yy(j)-vort_pos(2),xx(i)-vort_pos(1))
+                func=1.-exp(-0.7*r**1.15)
+                tmp(k,j,i)=func*exp(dir*eye*theta)
+                Psi(k,j,i)=Psi(k,j,i)*tmp(k,j,i)
+            end do
+          end do
+        end do
+      end do
+      if (rank==0) then
+        write(*,*) ' leap-frog alpha = ',(shiftv1/shiftv2)
+        write(*,*) ' mean velocity = ',2*pi/((2*pi)*(shiftv1+shiftv2))
+      end if
+  end subroutine
+  !----------------------------------------------------------
+subroutine setup_quench
+integer :: i, j, k, kk
+real :: rand_wave(3)
+real :: rand_amp(2)
+Psi=0
+do kk=1,20
+if (rank==0) then
+rand_wave(1)=floor(runif(-20.,20.))
+rand_wave(2)=floor(runif(-20.,20.))
+rand_wave(3)=floor(runif(-20.,20.))
+rand_amp(1)=runif(-0.1,0.1)
+rand_amp(2)=runif(-0.1,0.1)
+end if
+!now broadcast these quantities across procs
+call MPI_BCAST(rand_wave, 3, MPI_REAL, 0,comm2d,ierror)
+call MPI_BCAST(rand_amp, 2, MPI_REAL, 0,comm2d,ierror)
+do i=1, nmeshx
+do j=1, nmeshy
+do k=1, nmeshz
+   if (two_dim) then
+     Psi(k,j,i)=Psi(k,j,i)+(rand_amp(1)+eye*rand_amp(2))*exp(eye*(xx(i)*rand_wave(1)+yy(j)*rand_wave(2))*2*pi/Lx)
+   else
+     Psi(k,j,i)=Psi(k,j,i)+(rand_amp(1)+eye*rand_amp(2))*exp(eye*(xx(i)*rand_wave(1)+yy(j)*rand_wave(2)+zz(k)*rand_wave(3))*2*pi/Lx)
+   end if
+end do
+end do
+end do
+end do
+call multiply_thomas_fermi
+end subroutine
+!----------------------------------------------------------
   subroutine setup_lattice
     integer :: i, j, k
     integer :: v1, v2
+    real :: vort_pos0(2) !position of vortex in xy-plane
     real :: vort_pos(2) !position of vortex in xy-plane
+    real :: rphase, rdir, ramp
     real :: r, theta, func !to insert a vortex
       Psi(:,:,:)=(1.,1.)
-      do v1=1,3
-      do v2=1,3
-      vort_pos(1)=v1*(Lx/4.)
-      vort_pos(2)=v2*(Ly/4.)
+      do v1=1,10
+      do v2=1,10
+      vort_pos0(1)=v1*(Lx/16.)-Lx/3
+      vort_pos0(2)=v2*(Ly/16.)-Ly/3
+      if (rank==0) then
+         rphase=runif(0.,2*pi)
+      end if
+      call MPI_BCAST(rphase, 1, MPI_REAL, 0,comm2d,ierror)
+      if (rank==0) then
+         rdir=runif(0.,1.)
+          if (rdir<0.5) then
+            rdir=-1
+          else
+            rdir=1
+          end if
+      end if
+      call MPI_BCAST(rdir, 1, MPI_REAL, 0,comm2d,ierror)
+      if (rank==0) then
+         ramp=0. !runif(1.,15.)
+      end if
+      call MPI_BCAST(ramp, 1, MPI_REAL, 0,comm2d,ierror)
       do i=1, nmeshx
         do j=1, nmeshy
           do k=1, nmeshz
+              vort_pos(1)=vort_pos0(1)+rdir*ramp*cos(6*pi*zz(k)/Lz+rphase)
+              vort_pos(2)=vort_pos0(2)+ramp*sin(6*pi*zz(k)/Lz+rphase)
               r=sqrt((xx(i)-vort_pos(1))**2+(yy(j)-vort_pos(2))**2)
               theta=atan2(yy(j)-vort_pos(2),xx(i)-vort_pos(1))
               func=1.-exp(-0.7*r**1.15)
@@ -479,16 +641,157 @@ module initial
       do i=1, nmeshx
         do j=1, nmeshy
           do k=1, nmeshz
-            TF_dense=1.-(0.5*harm_wx*1.5/Lx**2)*(xx(i))**2 &
-                         -(0.5*harm_wy*1.5/Ly**2)*(yy(j))**2 &
-                         -(0.5*harm_wz*1.5/Lz**2)*(zz(k))**2
+            TF_dense=1-harm_wx*((xx(i))/Lx)**2-harm_wy*((yy(j))/Ly)**2-harm_wz*((zz(k))/Lz)**2
             TF_dense=TF_dense/sqrt(2.)
             if (TF_dense<0.) TF_dense=0.
             Psi(k,j,i)=cmplx(TF_dense,TF_dense)
+            !Psi(k,j,i)=cmplx(1./sqrt(2.),1./sqrt(2.))
           end do
         end do
       end do
   end subroutine
+!----------------------------------------------------------
+subroutine multiply_thomas_fermi
+implicit none
+real :: TF_dense
+integer :: i, j, k
+do i=1, nmeshx
+do j=1, nmeshy
+do k=1, nmeshz
+TF_dense=1-harm_wx*((xx(i))/Lx)**2-harm_wy*((yy(j))/Ly)**2-harm_wz*((zz(k))/Lz)**2
+if (TF_dense<0.) TF_dense=0.
+Psi(k,j,i)=Psi(k,j,i)*TF_dense
+end do
+end do
+end do
+end subroutine
+  !----------------------------------------------------------
+  subroutine setup_pcurrent
+    implicit none
+    integer :: i, j, k
+    real :: ldense, theta,r
+    select case(potential)
+      case('barrier')
+      do i=1, nmeshx
+      do j=1, nmeshy
+        do k=1, nmeshz
+          if (yy(j)<0.) then
+            theta=(xx(i))*50*pi/Lx
+          else
+            theta=20*pi-(xx(i))*50*pi/Lx
+          end if
+          ldense=abs(Psi(k,j,i))
+          Psi(k,j,i)=ldense*exp(eye*theta)
+        end do
+      end do
+      end do
+case('mobius')
+do i=1, nmeshx
+do j=1, nmeshy
+do k=1, nmeshz
+theta=20*atan2(yy(j),xx(i))
+ldense=abs(Psi(k,j,i))
+Psi(k,j,i)=ldense*exp(eye*theta)
+end do
+end do
+end do
+case('harmonic_ring')
+do i=1, nmeshx
+do j=1, nmeshy
+do k=1, nmeshz
+r=sqrt((xx(i)/Lx)**2+(yy(j)/Lx)**2)
+if (r<0.3) then
+theta=atan2(yy(j),xx(i))
+else
+theta=atan2(-yy(j),xx(i))
+end if
+
+          ldense=abs(Psi(k,j,i))
+Psi(k,j,i)=ldense*exp(10*eye*theta)
+end do
+end do
+end do
+      case('harmonic_ring2')
+        do i=1, nmeshx
+        do j=1, nmeshy
+          do k=1, nmeshz
+          if (yy(j)<0.) then
+            theta=atan2(0.5*(yy(j)+Ly/5),xx(i))
+          else
+            theta=atan2(0.5*(yy(j)-Ly/5),xx(i))-pi
+          end if
+          ldense=abs(Psi(k,j,i))
+          Psi(k,j,i)=ldense*exp(20*eye*theta)
+          end do
+        end do
+        end do
+     case('channel')
+     do i=1, nmeshx
+       do j=1, nmeshy
+         do k=1, nmeshz
+         theta=10*2*pi*(xx(i)+0.5*Lx)/Lx
+         ldense=abs(Psi(k,j,i))
+         Psi(k,j,i)=ldense*exp(2*eye*theta)
+         end do
+       end do
+     end do
+     end select
+end subroutine
+!----------------------------------------------------------
+subroutine add_noise
+implicit none
+integer :: i, j, k
+real :: ldense, theta
+real :: eta1, eta2
+do i=1, nmeshx
+do j=1, nmeshy
+do k=1, nmeshz
+call random_number(eta1)
+call random_number(eta2)
+eta1=eta1*2-1
+eta2=eta2*2-1
+Psi(k,j,i)=Psi(k,j,i)+0.01*cmplx(eta1,eta2)
+end do
+end do
+end do
+end subroutine
+!----------------------------------------------------------
+subroutine setup_add_ring
+implicit none
+integer :: i, j, k
+integer :: v1, option
+real :: translatex,translatey,translatez
+complex :: ring_p1, ring_p2
+real :: vort_pos(2) !position of vortex in xy-plane
+real :: r, theta, func !to insert a vortex
+translatex=-0.25*Lx
+translatey=0.
+translatez=0.
+option=1
+do i=1, nmeshx
+do j=1, nmeshy
+do k=1, nmeshz
+if (option==1) then
+theta=atan2(xx(i)-translatex,sqrt(yy(j)**2+(zz(k)-translatez)**2)+ring_rad)
+r=sqrt((xx(i)-translatex)**2+(sqrt(yy(j)**2+(zz(k)-translatez)**2)+ring_rad)**2)
+ring_p1=ring_density(r)*exp(eye*theta)
+theta=atan2(xx(i)-translatex,sqrt(yy(j)**2+(zz(k)-translatez)**2)-ring_rad)
+r=sqrt((xx(i)-translatex)**2+(sqrt(yy(j)**2+(zz(k)-translatez)**2)-ring_rad)**2)
+ring_p2=ring_density(r)*exp(eye*theta)
+Psi(k,j,i)=Psi(k,j,i)*ring_p1*conjg(ring_p2)
+else if (option==2) then
+theta=atan2(zz(k)-translatex,sqrt(yy(j)**2+(xx(i)-translatex)**2)+ring_rad)
+r=sqrt((zz(k)-translatez)**2+(sqrt(yy(j)**2+(xx(i)-translatex)**2)+ring_rad)**2)
+ring_p1=ring_density(r)*exp(eye*theta)
+theta=atan2(zz(k)-translatez,sqrt(yy(j)**2+(xx(i)-translatex)**2)-ring_rad)
+r=sqrt((zz(k)-translatez)**2+(sqrt(yy(j)**2+(xx(i)-translatex)**2)-ring_rad)**2)
+ring_p2=ring_density(r)*exp(eye*theta)
+Psi(k,j,i)=Psi(k,j,i)*ring_p1*conjg(ring_p2)
+end if
+end do
+end do
+end do
+end subroutine
   !----------------------------------------------------------
   subroutine reload_data
     implicit none
@@ -513,4 +816,56 @@ module initial
     call MPI_BARRIER(comm2D,ierror)
     if (rank==0) write(*,*) 'succsesful restart, t=',t
   end subroutine
+!----------------------------------------------------------
+subroutine phase_imprint
+implicit none
+integer :: i, j, k
+real :: vort_pos(2)
+real :: dense, theta
+vort_pos(1)=0.
+vort_pos(2)=0.
+do i=1, nmeshx
+do j=1, nmeshy
+do k=1, nmeshz
+dense=abs(Psi(k,j,i))
+theta=atan2(yy(j)-vort_pos(2),xx(i)-vort_pos(1))
+Psi(k,j,i)=dense*exp(winding_number*eye*theta)
+end do
+end do
+end do
+end subroutine
+
+!----------------------------------------------------------
+subroutine setup_add_dipole
+implicit none
+integer :: i, j, k
+integer :: v1
+real :: vort_pos(2) !position of vortex in xy-plane
+real :: r, theta, func !to insert a vortex
+real :: dir
+allocate(tmp(1:nmeshz,1:nmeshy,1:nmeshx))
+do v1=1,2
+if (v1==1) then
+vort_pos(1)=-20
+vort_pos(2)=5
+dir=1
+else
+vort_pos(1)=-20
+vort_pos(2)=-5
+dir=-1
+end if
+do i=1, nmeshx
+do j=1, nmeshy
+do k=1, nmeshz
+r=sqrt((xx(i)-vort_pos(1))**2+(yy(j)-vort_pos(2))**2)
+theta=atan2(yy(j)-vort_pos(2),xx(i)-vort_pos(1))
+func=1.-exp(-0.7*r**1.15)
+tmp(k,j,i)=func*exp(dir*eye*theta)
+Psi(k,j,i)=Psi(k,j,i)*tmp(k,j,i)
+end do
+end do
+end do
+end do
+deallocate(tmp)
+end subroutine
 end module

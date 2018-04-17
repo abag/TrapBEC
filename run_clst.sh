@@ -37,8 +37,8 @@ run() {
   pres_dir=`pwd`
   echo " cd '$pres_dir'" > ./temp.sh
   echo "/opt/mpiexec/bin/mpiexec -np $NPROCS $EXE" >> ./temp.sh
-  #qsub -l nodes=$NPROCSA:ppn=$NPROCSB,walltime=00:10:00,cput=00:10:00 ./temp.sh
-  qsub -l nodes=$NPROCSA:ppn=$NPROCSB ./temp.sh
+  qsub -l nodes=$NPROCSA:ppn=$NPROCSB,walltime=00:10:00,cput=00:10:00 ./temp.sh
+  #qsub -l nodes=$NPROCSA:ppn=$NPROCSB ./temp.sh
 }
 run_quiet() {
   echo Running job quietly...
