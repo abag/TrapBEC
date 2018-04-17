@@ -7,10 +7,20 @@ for k=1:Nz
         end
     end
 end
-imagesc(squeeze((Z(Nz/2,:,:))))
+if Nz==1
+    imagesc(squeeze((Z(1,:,:))))
+else
+    imagesc(squeeze((Z(Nz/2,:,:))))
+end
 shading interp
 colorbar
 colormap(fireprint)
 set(gca,'FontSize',16)
+daspect([1 1 1])
+figure 
+xslice = [0.0]; yslice = 0.; zslice = [0.,0.];
+temp_Z=permute(Z,[3 2 1]);
+slice(xx,yy,zz,abs(temp_Z),xslice,yslice,zslice)
+shading interp
 
 

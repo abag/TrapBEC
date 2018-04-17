@@ -1,9 +1,9 @@
 function gather(var_number)
-global Psi nproc nmeshx nmeshy nmeshz Nx Ny Nz xx yy zz Lx Ly Lz t vel
+global Psi nproc nmeshx nmeshy nmeshz Nx Ny Nz xx yy zz Lx Ly Lz t
 cluster=0 % if set to 1 means double precision endians
 t(1:nproc)=0.;
 for i=0:(nproc-1)
-  filename=sprintf('./data/proc%02d/var%03d.dat',i,var_number);
+  filename=sprintf('./data/proc%02d/var%04d.dat',i,var_number);
   fid=fopen(filename,'r');
   if (fid<0)
       disp('file does not exist-exiting script')
@@ -25,8 +25,6 @@ for i=0:(nproc-1)
   A=fread(fid,[2*nmeshz*nmeshy*nmeshx],'float32');
   B=reshape(A,2,nmeshz,nmeshy,nmeshx);
   Psi(1:nmeshz,coordy*nmeshy+1:(coordy+1)*nmeshy,coordx*nmeshx+1:(coordx+1)*nmeshx)=B(1,:,:,:)+sqrt(-1.)*B(2,:,:,:);
-  C=fread(fid,[3*nmeshz*nmeshy*nmeshx],'float32');
-  vel(1:nmeshz,coordy*nmeshy+1:(coordy+1)*nmeshy,coordx*nmeshx+1:(coordx+1)*nmeshx,:)=reshape(C,nmeshz,nmeshy,nmeshx,3);
   endian2=fread(fid,1,'float32');
   fclose(fid);
 end
@@ -43,5 +41,3 @@ end
 for i=1:Nz
   zz(i)=Lz*((2*i-1)/(2*Nz))-Lz/2.;
 end
-
-                   
