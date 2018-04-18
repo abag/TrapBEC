@@ -27,6 +27,9 @@ program run
         if (mod(itime,shots)==0.and.rank==0) then
            print*, itime/shots, imag_Psiratio
         end if
+        if (mod(itime,shots)==0) then
+           if (imaginary_output) call imaginary_print !output.f90
+        end if
      end do
      if (rank==0) write(*,*) 'finished imaginary time propagation'
    end if

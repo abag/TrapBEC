@@ -59,6 +59,15 @@ module output
    close(87)
   end subroutine
   !---------------------------------------------
+  subroutine imaginary_print
+    implicit none
+    integer :: i, j
+      write(unit=print_file,fmt="(a,i2.2,a,i4.4,a)")"./data/proc",rank,"/imag_var",itime/shots, ".dat"
+      open(unit=98,file=print_file,status='replace',form='unformatted')
+        write(98) coords, Lx, Ly, Lz, t, Psi(1:nmeshz,1:nmeshy,1:nmeshx)
+      close(98)
+   end subroutine
+  !---------------------------------------------
   subroutine var_print
     implicit none
     integer :: i, j

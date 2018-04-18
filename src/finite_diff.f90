@@ -117,7 +117,7 @@
       end select
       if (lbeam) then
          las_freq=0.0
-         las_x=15*cos(las_freq*t)*(1.-sin(las_freq*t))
+         las_x=70*cos(las_freq*t)*(1.-sin(las_freq*t))
          las_y=30*sin(las_freq*t)*cos(las_freq*t)
          pot=pot+20*exp(-((xx(i)-las_x)/wbeam)**2-((yy(j)-las_y)/wbeam)**2)
       end if

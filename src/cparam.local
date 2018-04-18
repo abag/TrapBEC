@@ -1,17 +1,17 @@
 !/* vim: set filetype=fortran : */
-real  :: Lx=128., Ly=128., Lz=128
-integer, parameter :: Nx=128, Ny=128, Nz=128
+real  :: Lx=256., Ly=256., Lz=1
+integer, parameter :: Nx=256, Ny=256, Nz=1
 complex :: dt=0.05
 integer, parameter :: shots=100
 integer, parameter :: nsteps=100000
 character(len=*), parameter :: boundaries='zero'
 logical, parameter :: periodicz=.true.
-character(len=*), parameter :: init_cond='constant'
+character(len=*), parameter :: init_cond='random_points'
 character(len=*), parameter :: potential='quartic'
-real, parameter :: harm_wx=800, harm_wy=8, harm_wz=0. !trapping potentials set
+real, parameter :: harm_wx=900, harm_wy=8, harm_wz=6. !trapping potentials set
 real, parameter :: potential_off=huge(1.)
-real, parameter :: gamma=0.001 !dissipation
-logical, parameter :: two_dim=.false.
+real, parameter :: gamma=0.003 !dissipation
+logical, parameter :: two_dim=.true.
 logical, parameter :: phase_imprint_on=.false.
 !----------------lasers------------
 logical, parameter :: lbeam=.true.
@@ -19,8 +19,8 @@ logical, parameter :: add_pcurrent=.false.
 real, parameter :: wbeam=4.
 !----------------reference frame----------
 real, parameter :: advective_vx=0.
-real, parameter :: omega_z=0.025
-real, parameter :: t_spindown=0.001
+real, parameter :: omega_z=0.008
+real, parameter :: t_spindown=huge(1.)
 !----------------vortex_lines------------
 integer, parameter :: winding_number=10
 !----------------vortex_rings------------
@@ -31,14 +31,14 @@ logical, parameter :: add_dipole=.false.
 !----------------vortex_lines------------
 integer, parameter :: vor_line_count=100
 !----------------imaginary time----------
-logical, parameter :: imaginary_time=.true.
-!integer, parameter :: imag_nsteps=50000
-integer, parameter :: imag_nsteps=2000
+logical, parameter :: imaginary_time=.false.
+integer, parameter :: imag_nsteps=20000
 !-----------------forcing----------------
 logical, parameter :: forcing=.false.
 integer, parameter :: force_freq=10
 !----------------output------------------
 logical, parameter :: full_binary_output=.true.
+logical, parameter :: imaginary_output=.true.
 logical, parameter :: gnuplot_2d_print=.false.
 logical, parameter :: qpress_print=.false.
 logical, parameter :: vel_print=.false.
