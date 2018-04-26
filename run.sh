@@ -75,7 +75,7 @@ do
  esac
 done
 
-DIGITS="2"
+DIGITS="3"
 EXE="./src/run.x"
 LOGFILE="out.log"
 

@@ -3,7 +3,7 @@ global Psi nproc nmeshx nmeshy nmeshz Nx Ny Nz xx yy zz Lx Ly Lz t
 cluster=0 % if set to 1 means double precision endians
 t(1:nproc)=0.;
 for i=0:(nproc-1)
-  filename=sprintf('./data/proc%02d/var%04d.dat',i,var_number);
+  filename=sprintf('./data/proc%03d/var%04d.dat',i,var_number);
   fid=fopen(filename,'r');
   if (fid<0)
       disp('file does not exist-exiting script')
