@@ -62,7 +62,7 @@ module output
   subroutine imaginary_print
     implicit none
     integer :: i, j
-      write(unit=print_file,fmt="(a,i2.2,a,i4.4,a)")"./data/proc",rank,"/imag_var",itime/shots, ".dat"
+      write(unit=print_file,fmt="(a,i3.3,a,i4.4,a)")"./data/proc",rank,"/imag_var",itime/shots, ".dat"
       open(unit=98,file=print_file,status='replace',form='unformatted')
         write(98) coords, Lx, Ly, Lz, t, Psi(1:nmeshz,1:nmeshy,1:nmeshx)
       close(98)
@@ -72,25 +72,25 @@ module output
     implicit none
     integer :: i, j
     if (full_binary_output) then
-      write(unit=print_file,fmt="(a,i2.2,a,i4.4,a)")"./data/proc",rank,"/var",itime/shots, ".dat"
+      write(unit=print_file,fmt="(a,i3.3,a,i4.4,a)")"./data/proc",rank,"/var",itime/shots, ".dat"
       open(unit=98,file=print_file,status='replace',form='unformatted')
         write(98) coords, Lx, Ly, Lz, t, Psi(1:nmeshz,1:nmeshy,1:nmeshx)
       close(98)
     end if
     if (vel_print) then
-      write(unit=print_file,fmt="(a,i2.2,a,i2.2,a)")"./data/proc",rank,"/vel",itime/shots, ".dat"
+      write(unit=print_file,fmt="(a,i3.3,a,i2.2,a)")"./data/proc",rank,"/vel",itime/shots, ".dat"
       open(unit=98,file=print_file,status='replace',form='unformatted')
         write(98) coords, vel
       close(98)
     end if
     if (qpress_print) then
-      write(unit=print_file,fmt="(a,i2.2,a,i2.2,a)")"./data/proc",rank,"/qpress",itime/shots, ".dat"
+      write(unit=print_file,fmt="(a,i3.3,a,i2.2,a)")"./data/proc",rank,"/qpress",itime/shots, ".dat"
       open(unit=98,file=print_file,status='replace',form='unformatted')
         write(98) coords, qpressure
       close(98)
     end if
     if (gnuplot_2D_print) then
-      write(unit=print_file,fmt="(a,i2.2,a,i2.2,a)")"./data/proc",rank,"/2D_slice",itime/shots, ".log"
+      write(unit=print_file,fmt="(a,i3.3,a,i2.2,a)")"./data/proc",rank,"/2D_slice",itime/shots, ".log"
       open(unit=98,file=print_file,status='replace')
       do i=1, nmeshx
         do j=1, nmeshy
@@ -100,7 +100,7 @@ module output
       end do
       close(98)
     end if
-    write(unit=print_save,fmt="(a,i2.2,a)")"./data/proc",rank,"/var.dat"
+    write(unit=print_save,fmt="(a,i3.3,a)")"./data/proc",rank,"/var.dat"
     open(unit=98,file=print_save,status='replace',form='unformatted')
       write(98) itime+1
       write(98) t
